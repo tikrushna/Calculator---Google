@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="A clean, offline calculator with parentheses, percentages, calculation history and keyboard support.">
+<title>Calculator</title>
+<style>
+:root{color-scheme:light;--background:oklch(1 0 0);--ink:oklch(.23 .003 250);--muted:oklch(.43 .006 250);--number:oklch(.899 .013 253);--operator:oklch(.885 .065 235);--operator-ink:oklch(.38 .095 239);--clear:oklch(.898 .055 260);--clear-ink:oklch(.395 .17 260);--equals:oklch(.455 .125 148);--equals-ink:oklch(1 0 0);--line:oklch(.92 .008 250);--overlay:oklch(.2 .01 250 / .2);--focus:oklch(.53 .13 240);--shadow:0 12px 48px oklch(.2 .01 250 / .12);--radius:8px;font-family:Arial,Helvetica,sans-serif;letter-spacing:0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--background);color:var(--ink);overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none;border:0;letter-spacing:0}
+button:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.calculator{width:100%;max-width:576px;height:auto;min-height:max(490px,100dvh);margin:auto;display:flex;flex-direction:column;padding: max(30px,env(safe-area-inset-top)) 6px max(24px,env(safe-area-inset-bottom));background:var(--background)}
+.toolbar{display:flex;justify-content:space-between;align-items:center;padding:0 24px;height:64px;flex-shrink:0}
+.icon-button{display:grid;place-items:center;width:48px;height:48px;background:transparent;border-radius:50%;color:var(--muted);transition:background .15s,transform .15s}
+.icon-button:hover{background:var(--number)}
+.icon-button:active{transform:scale(.91)}
+.icon-button svg{width:29px;height:29px;stroke-width:2.4}
+.display{flex:1 0 auto;min-width:0;min-height:160px;display:flex;flex-direction:column;justify-content:flex-end;text-align:right;padding:16px 22px 18px;overflow:visible}
+.expression{font-size:64px;line-height:1.2;min-height:77px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;font-weight:400;user-select:text;flex-shrink:0;min-width:0;max-width:100%}
+.expression::-webkit-scrollbar{display:none}
+.preview{font-size:28px;line-height:1.4;min-height:40px;color:var(--muted);white-space:normal;overflow-wrap:anywhere;word-break:break-word;flex-shrink:0;min-width:0;max-width:100%}
+.display.error .expression{white-space:normal;color:var(--muted)}
+.expander{margin:0 0 23px 27px;flex-shrink:0;width:48px;height:42px}
+.expander svg{width:25px;height:30px}
+.keypad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex-shrink:0}
+.key{border-radius:50%;aspect-ratio:1.055;display:grid;place-items:center;background:var(--number);font-size:64px;line-height:1;font-weight:400;transition:transform .1s;min-width:0}
+.key.operator{background:var(--operator);color:var(--operator-ink)}
+.key.clear{background:var(--clear);color:var(--clear-ink);font-size:59px}
+.key.equals{background:var(--equals);color:var(--equals-ink)}
+.key svg{width:57px;height:57px;stroke-width:2.1}
+.key:hover{filter:none}
+.key:active,.key.pressed{transform:scale(.96)}
+.scientific{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.scientific[hidden]{display:none}
+.scientific button{background:var(--number);border-radius:var(--radius);height:45px;font-size:22px}
+.dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--background);color:var(--ink);padding:0;width:calc(100% - 36px);max-width:440px;box-shadow:var(--shadow)}
+.dialog::backdrop{background:var(--overlay)}
+.dialog header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+h2{font-size:20px;font-weight:500;margin:0}
+.dialog-content{padding:16px;max-height:60dvh;overflow:auto}
+.history-item{display:block;width:100%;text-align:right;background:transparent;padding:16px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.history-item small{display:block;font-size:16px;color:var(--muted);margin-bottom:6px}
+.history-item strong{font-size:26px;font-weight:400}
+.menu-item{display:block;background:transparent;width:100%;text-align:left;padding:16px 8px;font-size:18px;border-radius:var(--radius)}
+.menu-item:hover,.history-item:hover{background:var(--number)}
+.empty{margin:20px 0;color:var(--muted);text-align:center;line-height:1.5}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--background);border-radius:var(--radius);padding:12px 20px;font-size:15px;z-index:5;pointer-events:none;max-width:90%;text-align:center}
+.toast[hidden]{display:none}
+/* Keep the entire calculator inside the available screen, including safe areas. */
+html,body{height:100%;overflow:hidden}
+body{display:grid;place-items:center;height:100dvh}
+.calculator{height:100dvh;max-height:900px;min-height:0;max-width:576px;padding:max(8px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left));overflow:hidden}
+.toolbar{height:clamp(32px,7dvh,64px);padding:0 15px}
+.icon-button{height:min(48px,7dvh);width:min(48px,7dvh)}
+.icon-button svg{max-width:70%;max-height:70%}
+.display{flex:1 1 0;min-height:0;padding:4px 18px 8px;overflow:hidden}
+.expression{min-height:0;line-height:1.15;flex-shrink:1}
+.preview{font-size:min(28px,4dvh);min-height:0;line-height:1.3;flex-shrink:0}
+.display.error .expression{color:var(--muted);font-size:inherit!important}
+.expander{margin:0 0 min(14px,2dvh) 16px;height:min(42px,5dvh)}
+.keypad{flex:0 1 auto;aspect-ratio:0.84;max-height:65%;min-height:0;grid-template-rows:repeat(5,minmax(0,1fr));gap:5px}
+.key{aspect-ratio:auto;min-height:0;font-size:min(64px,8dvh,11vw)}
+.key.clear{font-size:min(59px,7.5dvh,10vw)}
+.key svg{width:min(57px,7dvh,10vw);height:min(57px,7dvh,10vw)}
+.scientific{flex:0 0 auto;margin-bottom:6px}
+.scientific button{height:min(45px,6dvh);font-size:min(22px,4dvh)}
+@media(min-width:768px){.calculator{max-width:440px}.key{font-size:min(48px,8dvh)}.key.clear{font-size:min(44px,7.5dvh)}}
+@media(max-height:450px){.calculator{max-width:440px}.toolbar{height:30px}.icon-button{height:30px;width:30px}.display{padding:2px 15px 4px}.expander{height:24px;margin-bottom:4px}.keypad{gap:4px}.scientific{margin-bottom:4px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="calculator" aria-label="Calculator">
+ <header class="toolbar">
+  <button class="icon-button" id="history-button" aria-label="Calculation history" title="Calculation history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 4v6h6"/><path d="M3.6 9a10 10 0 1 1-.2 6"/><path d="M12 6v6l4 3"/></svg></button>
+  <button class="icon-button" id="menu-button" aria-label="More options" title="More options"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="20" r="2.2"/></svg></button>
+ </header>
+ <section class="display" aria-label="Calculation display">
+  <div class="expression" id="expression" role="status" aria-live="polite" aria-atomic="true" aria-label="0"></div>
+  <output class="preview" id="preview" aria-label="Result preview"></output>
+ </section>
+ <button class="icon-button expander" id="expand-button" aria-label="Show additional operations" aria-expanded="false" title="Additional operations"><svg viewBox="0 0 24 30" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7-7 7 7M5 21l7 7 7-7"/></svg></button>
+ <section class="scientific" id="scientific" aria-label="Additional operations" hidden>
+  <button data-action="sign" aria-label="Change sign">±</button><button data-action="sqrt" aria-label="Square root">√</button><button data-action="square" aria-label="Square">x²</button><button data-action="reciprocal" aria-label="Reciprocal">1/x</button>
+ </section>
+ <section class="keypad" aria-label="Calculator keypad">
+  <button class="key clear" data-action="clear" aria-label="All clear">AC</button>
+  <button class="key operator" data-action="parenthesis" aria-label="Parentheses">( )</button>
+  <button class="key operator" data-value="%" aria-label="Percent">%</button>
+  <button class="key operator" data-value="/" aria-label="Divide">÷</button>
+  <button class="key" data-value="7">7</button><button class="key" data-value="8">8</button><button class="key" data-value="9">9</button>
+  <button class="key operator" data-value="*" aria-label="Multiply">×</button>
+  <button class="key" data-value="4">4</button><button class="key" data-value="5">5</button><button class="key" data-value="6">6</button>
+  <button class="key operator" data-value="-" aria-label="Subtract">−</button>
+  <button class="key" data-value="1">1</button><button class="key" data-value="2">2</button><button class="key" data-value="3">3</button>
+  <button class="key operator" data-value="+" aria-label="Add">+</button>
+  <button class="key" data-value="0">0</button><button class="key" data-value="." aria-label="Decimal point">.</button>
+  <button class="key" data-action="delete" aria-label="Delete last digit" title="Delete last digit"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h17v22H12L3 16Z"/><path d="m14 12 8 8m0-8-8 8"/></svg></button>
+  <button class="key equals" data-action="equals" aria-label="Equals">=</button>
+ </section>
+</main>
+<dialog class="dialog" id="history-dialog" aria-labelledby="history-title"><header><h2 id="history-title">History</h2><button class="icon-button close-dialog" aria-label="Close history">✕</button></header><div class="dialog-content" id="history-list"></div></dialog>
+<dialog class="dialog" id="menu-dialog" aria-labelledby="menu-title"><header><h2 id="menu-title">Options</h2><button class="icon-button close-dialog" aria-label="Close options">✕</button></header><div class="dialog-content"><button class="menu-item" id="copy-button">Copy result</button><button class="menu-item" id="clear-history-button">Clear history</button></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<script>
+'use strict';
+// Recursive-descent arithmetic parser: no eval, Function, or network access.
+// A direct percentage after + or − is relative to the preceding value.
+function calculate(source) {
+ let position=0;
+ const fail=()=>{throw new Error('Check your calculation');};
+ const checked=value=>{if(!Number.isFinite(value))throw new Error('Result is too large');return value;};
+ function primary(){
+  let value;
+  if(source[position]==='('){position++;value=additive();if(source[position]!==')')fail();position++;}
+  else{const match=source.slice(position).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/i);if(!match)fail();position+=match[0].length;value={v:checked(Number(match[0])),percent:false};}
+  while(source[position]==='%'){position++;value={v:value.v/100,percent:true};}
+  return value;
+ }
+ function unary(){if(source[position]==='+'||source[position]==='-'){const sign=source[position++];const value=unary();return {v:sign==='-'?-value.v:value.v,percent:value.percent};}return primary();}
+ function multiplicative(){let left=unary();while(source[position]==='*'||source[position]==='/'){const op=source[position++];const right=unary();if(op==='/'&&right.v===0)throw new Error('Cannot divide by zero');left={v:checked(op==='*'?left.v*right.v:left.v/right.v),percent:false};}return left;}
+ function additive(){let left=multiplicative();while(source[position]==='+'||source[position]==='-'){const op=source[position++];const right=multiplicative();const amount=right.percent?left.v*right.v:right.v;left={v:checked(op==='+'?left.v+amount:left.v-amount),percent:false};}return left;}
+ if(!source) return 0;
+ const result=additive();if(position!==source.length)fail();return checked(result.v);
+}
+function format(value){if(!Number.isFinite(value))throw new Error('Result is too large');return String(Number(value.toPrecision(14)));}
+const expressionElement=document.getElementById('expression'), previewElement=document.getElementById('preview'), display=document.querySelector('.display');
+let expression='',completed=false,error='',history=[],toastTimer;
+const pretty=value=>value.replace(/\*/g,'×').replace(/\//g,'÷').replace(/-/g,'−');
+function balanced(value){const count=(value.match(/\(/g)||[]).length-(value.match(/\)/g)||[]).length;return value+')'.repeat(Math.max(0,count));}
+// Fit both lines to their actual space once per animation frame.
+let fitFrame=0;
+function fitDisplay(){
+ if(fitFrame)return;
+ fitFrame=requestAnimationFrame(()=>{
+  fitFrame=0;
+  const style=getComputedStyle(display);
+  const height=display.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+  const width=expressionElement.clientWidth;
+  const base=window.innerHeight<=650?40:window.innerWidth<=430?52:64;
+  previewElement.style.fontSize=Math.min(28,window.innerHeight*.04)+'px';
+  let low=7,high=error?Math.min(30,base):base;
+  for(let i=0;i<8;i++){
+   const size=(low+high)/2;
+   expressionElement.style.fontSize=size+'px';
+   if(expressionElement.scrollHeight+previewElement.scrollHeight<=height&&expressionElement.scrollWidth<=width)low=size;else high=size;
+  }
+  expressionElement.style.fontSize=Math.floor(low*10)/10+'px';
+ });
+}
+function render(){display.classList.toggle('error',Boolean(error));expressionElement.textContent=error||pretty(expression);expressionElement.setAttribute('aria-label',error||pretty(expression)||'0');previewElement.textContent='';if(!error&&!completed&&expression&&/[+*/%()-]/.test(expression)){try{const value=format(calculate(balanced(expression)));if(value!==expression)previewElement.textContent=pretty(value);}catch{}}
+ fitDisplay();
+}
+function clear(){expression='';error='';completed=false;render();}
+function input(value){
+ if(error){expression='';error='';completed=false;}
+ const isDigit=/^\d$/.test(value),isOperator=/^[+*/-]$/.test(value);
+ if(completed){if(isDigit||value==='.'||value==='(')expression='';completed=false;}
+ if(expression.length>=240&&!isOperator){notify('Calculation is too long');return;}
+ if(isDigit){if(/[)%]$/.test(expression))expression+='*';const match=expression.match(/(?:^|[+*/(\-])(0)$/);if(match)expression=expression.slice(0,-1);expression+=value;}
+ else if(value==='.'){const number=expression.match(/(?:\d*\.?\d*)(?:e[+-]?\d+)?$/i)?.[0]||'';if(number.includes('.')||number.includes('e'))return;if(/[)%]$/.test(expression))expression+='*';if(!/\d$/.test(expression))expression+='0';expression+='.';}
+ else if(isOperator){if(!expression){if(value==='-')expression='-';else return;}else if(expression.endsWith('(')){if(value==='-')expression+='-';else return;}else if(/[+*/-]$/.test(expression)){if(value==='-'&&/[*/]$/.test(expression))expression+='-';else expression=expression.replace(/[+*/-]+$/,value);}else expression+=value;}
+ else if(value==='%'){if(/[\d)]$/.test(expression))expression+='%';}
+ else if(value==='('){if(/[\d)%]$/.test(expression))expression+='*';expression+='(';}
+ else if(value===')'){const opens=(expression.match(/\(/g)||[]).length,closes=(expression.match(/\)/g)||[]).length;if(opens>closes&&/[\d)%]$/.test(expression))expression+=')';}
+ render();
+}
+function equals(){if(!expression||completed)return;try{const original=balanced(expression);const value=format(calculate(original));history.unshift({expression:original,result:value});if(history.length>100)history.pop();expression=value;completed=true;error='';}catch(problem){error=problem.message;}render();}
+function additional(action){try{const source=balanced(expression||'0'),value=calculate(source);let result;if(action==='sign')result=-value;if(action==='square')result=value*value;if(action==='sqrt'){if(value<0)throw new Error('Use a nonnegative number');result=Math.sqrt(value);}if(action==='reciprocal'){if(value===0)throw new Error('Cannot divide by zero');result=1/value;}expression=format(result);completed=true;error='';}catch(problem){error=problem.message;}render();}
+function act(action){if(action==='clear')clear();else if(action==='delete'){if(error)error='';else expression=expression.slice(0,-1);completed=false;render();}else if(action==='equals')equals();else if(action==='parenthesis'){const opens=(expression.match(/\(/g)||[]).length,closes=(expression.match(/\)/g)||[]).length;input(opens>closes&&/[\d)%]$/.test(expression)?')':'(');}else additional(action);}
+document.querySelectorAll('[data-value],[data-action]').forEach(button=>button.addEventListener('click',()=>button.dataset.value?input(button.dataset.value):act(button.dataset.action)));
+const historyDialog=document.getElementById('history-dialog'),menuDialog=document.getElementById('menu-dialog');
+document.getElementById('history-button').addEventListener('click',()=>{const list=document.getElementById('history-list');list.replaceChildren();if(!history.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='No calculations yet';list.append(empty);}history.forEach(item=>{const button=document.createElement('button');button.className='history-item';const small=document.createElement('small'),strong=document.createElement('strong');small.textContent=pretty(item.expression)+' =';strong.textContent=pretty(item.result);button.append(small,strong);button.setAttribute('aria-label','Use result '+item.result);button.addEventListener('click',()=>{expression=item.result;completed=true;error='';render();historyDialog.close();});list.append(button);});historyDialog.showModal();});
+document.getElementById('menu-button').addEventListener('click',()=>menuDialog.showModal());
+document.querySelectorAll('.close-dialog').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
+for(const dialog of [historyDialog,menuDialog])dialog.addEventListener('click',event=>{if(event.target===dialog){const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close();}});
+document.getElementById('expand-button').addEventListener('click',event=>{const panel=document.getElementById('scientific'),button=event.currentTarget;panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));button.setAttribute('aria-label',panel.hidden?'Show additional operations':'Hide additional operations');fitDisplay();});
+function notify(message){const toast=document.getElementById('toast');clearTimeout(toastTimer);toast.textContent=message;toast.hidden=false;toastTimer=setTimeout(()=>toast.hidden=true,2200);}
+document.getElementById('clear-history-button').addEventListener('click',()=>{history=[];menuDialog.close();notify('History cleared');});
+document.getElementById('copy-button').addEventListener('click',async()=>{try{const result=format(calculate(balanced(expression||'0')));if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(result);}else{const field=document.createElement('textarea');field.value=result;field.setAttribute('aria-label','Copy result');field.style.position='fixed';field.style.opacity='0';menuDialog.append(field);field.select();const copied=document.execCommand('copy');field.remove();if(!copied)throw new Error('Copy is unavailable in this browser');}menuDialog.close();notify('Result copied');}catch(problem){menuDialog.close();notify(problem.message);}});
+document.addEventListener('keydown',event=>{if(historyDialog.open||menuDialog.open||event.ctrlKey||event.metaKey||event.altKey)return;let value=event.key,action;if(value==='Enter'||value==='=')action='equals';else if(value==='Backspace'||value==='Delete')action='delete';else if(value==='Escape'||value.toLowerCase()==='c')action='clear';else if(value.toLowerCase()==='x')value='*';else if(!/^[\d.+*/%()\-]$/.test(value))return;event.preventDefault();if(action)act(action);else input(value);const button=Array.from(document.querySelectorAll('.key')).find(b=>action?b.dataset.action===action:b.dataset.value===value);if(button){button.classList.add('pressed');setTimeout(()=>button.classList.remove('pressed'),120);}});
+window.addEventListener('resize',fitDisplay);
+if('ResizeObserver' in window)new ResizeObserver(fitDisplay).observe(display);
+render();
+</script>
+</body>
+</html>
